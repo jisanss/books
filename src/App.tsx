@@ -85,11 +85,11 @@ const callGeminiAPI = async (prompt: string, apiKey: string, imageBase64: string
   }
 };
 
-// 구글 도서 API로 쪽수 자동 조회 (AI 토큰 낭비 방지)
-const fetchPageCountFromGoogleBooks = async (title: string, authors: string) => {
+const fetchPageCountFromGoogleBooks = async (title: string) => {
   try {
-    const query = `${title} ${authors}`.trim();
-    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}`);
+    // 특수문자 및 부제 제거하여 검색 정확도 높이기
+    const cleanTitle = title.replace(/\[.*?\]|\(.*?\)|[:,\-].*/g, '').trim();
+    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(cleanTitle)}`);
     const data = await res.json();
     if (data.items && data.items.length > 0) {
       for (const item of data.items) {
@@ -101,7 +101,7 @@ const fetchPageCountFromGoogleBooks = async (title: string, authors: string) => 
   } catch (e) {
     console.error("Google Books API Error:", e);
   }
-  return 250; // 기본값
+  return 250; 
 };
 
 export default function App() {
@@ -234,7 +234,7 @@ export default function App() {
         {currentTab === 'tower' && <BookTowerView books={books} onSelect={(b: any) => { setSelectedBook(b); setCurrentTab('detail'); }} onAdd={()=>setCurrentTab('search')} apiKey={apiKey} />}
         {currentTab === 'desk' && <DeskView books={books} onSelect={(b: any) => { setSelectedBook(b); setCurrentTab('detail'); }} user={user} setTab={setCurrentTab} />}
         {currentTab === 'search' && <BookSearchView kakaoApiKey={kakaoApiKey} onSelectForAdd={async (b: any) => {
-          const pages = await fetchPageCountFromGoogleBooks(b.title, b.authors);
+          const pages = await fetchPageCountFromGoogleBooks(b.title);
           setSelectedBook({ ...b, pageCount: pages });
           setCurrentTab('addForm');
         }} />}
@@ -298,13 +298,12 @@ const BookTowerView = ({ books, onSelect, onAdd, apiKey }: { books: any[], onSel
     const finishedList = books.filter(b => b.status === 'finished').map(b => `${b.title} (${b.authors})`).join(', ');
     const prompt = `사용자가 지금까지 완독한 책 목록이야: [${finishedList}]. 이 책들의 취향을 분석해서, 다음에 읽으면 좋을 책 3권을 재치 있는 한줄평과 함께 추천해줘. 친근한 말투로 대답해줘.`;
     const res = await callGeminiAPI(prompt, apiKey);
-    setRecommendText(res || "추천을 불러오지 못했어요.");
+    setRecommendText(res || "추천을 불러오지 못했어요. API 키를 확인해 주세요.");
     setIsRecLoading(false);
   };
 
   return (
     <div className="flex flex-col items-center min-h-[75vh] pb-10 animate-in fade-in">
-      {/* 5권 완독 달성 배너 */}
       {finishedCount > 0 && finishedCount % 5 === 0 && (
         <div className="w-full bg-[#FDE047] sketch-border p-4 mb-4 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-2">
@@ -376,7 +375,6 @@ const BookTowerView = ({ books, onSelect, onAdd, apiKey }: { books: any[], onSel
         </div>
       )}
 
-      {/* AI 추천 모달 */}
       {recommendModal && (
         <div className="fixed inset-0 bg-[#451A03]/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-[#FDFBF7] sketch-border p-6 w-full max-w-md shadow-xl flex flex-col max-h-[80vh]">
@@ -411,6 +409,17 @@ const DeskView = ({ books, onSelect, user, setTab }: { books: any[], onSelect: a
     setTab('tower');
   };
 
+  // 책상에서 곧바로 서재(완독)로 보내기 함수
+  const handleFinishDirect = async (book: any) => {
+    if(!user) return;
+    const bookRef = doc(db, 'users', user.uid, 'books', book.id);
+    await setDoc(bookRef, { 
+      status: 'finished', 
+      endDate: new Date().toISOString().split('T')[0]
+    }, { merge: true });
+    setTab('tower');
+  };
+
   return (
     <div className="animate-in fade-in pb-10">
       <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><BookOpen className="w-5 h-5 text-[#FDE047] fill-current"/> 내 책상 (읽는 중)</h2>
@@ -437,6 +446,7 @@ const DeskView = ({ books, onSelect, user, setTab }: { books: any[], onSelect: a
               </div>
               <div className="flex gap-2 border-t-2 border-dashed border-[#451A03]/10 pt-3">
                 <button onClick={() => setAbandonModal(book)} className="flex-1 py-2 text-xs font-bold text-[#451A03]/60 bg-white hover:bg-stone-100 rounded-xl transition-colors cursor-pointer">포기할래요 🏳️</button>
+                <button onClick={() => handleFinishDirect(book)} className="flex-1 py-2 text-xs font-bold bg-[#86EFAC]/40 text-[#14532d] sketch-border rounded-xl hover:bg-[#86EFAC]/60 transition-all cursor-pointer">다 읽었어요 📚</button>
                 <button onClick={() => onSelect(book)} className="flex-1 py-2 text-xs font-bold bg-[#FDE047] text-[#451A03] sketch-border shadow-[2px_2px_0px_#451A03] rounded-xl hover:bg-[#FCD34D] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer">기록하기 ✏️</button>
               </div>
             </div>
@@ -641,7 +651,7 @@ const BookAddFormView = ({ user, initialBook, onSaved }: { user: any, initialBoo
         </div>
 
         <div>
-          <label className="block text-xs font-bold mb-1.5 text-[#451A03]/70">총 페이지 수 (자동 연동됨)</label>
+          <label className="block text-xs font-bold mb-1.5 text-[#451A03]/70">총 페이지 수 (필요시 수정 가능)</label>
           <input type="number" inputMode="numeric" value={bookData.pageCount} onChange={e=>setBookData({...bookData, pageCount: Number(e.target.value)})} className="w-full p-2.5 bg-white sketch-border text-sm" />
         </div>
 
@@ -701,7 +711,6 @@ const BookDetailView = ({ user, book, apiKey, onClose }: { user: any, book: any,
 
   if (!book) return null;
 
-  // 독서 노트에서 형광펜 문장 추출
   const getHighlightSnippet = () => {
     if (!noteHtml) return null;
     const match = noteHtml.match(/background-color:\s*(?:#FEF08A|yellow|#fef08a)[^>]*>([^<]+)</i) || noteHtml.match(/<mark[^>]*>([^<]+)<\/mark>/i);
@@ -769,7 +778,6 @@ const BookDetailView = ({ user, book, apiKey, onClose }: { user: any, book: any,
 
         {activeTab === 'note' && <NoteEditor apiKey={apiKey} initialHtml={noteHtml} editorRef={editorRef} />}
 
-        {/* 영수증 스타일 방명록 (컬러 표지 및 형광펜 문구 연동) */}
         {activeTab === 'guestbook' && (
           <div className="p-4">
             <div className="receipt-paper p-6 mx-auto max-w-sm flex flex-col items-center">
