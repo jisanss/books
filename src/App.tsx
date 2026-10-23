@@ -77,7 +77,10 @@ const callGeminiAPI = async (prompt: string, apiKey: string, imageBase64: string
     if (!response.ok) return null;
     const result = await response.json();
     return result.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  } catch(e) { return null; }
+  } catch(e) { 
+    console.error("Gemini API Error:", e);
+    return null; 
+  }
 };
 
 // --- Main App ---
@@ -140,7 +143,8 @@ export default function App() {
 
   const handleBookAdd = (newBook: any) => {
     setSelectedBook(newBook);
-    setCurrentTab('detail'); 
+    // 선택된 상태에 따라 올바른 탭으로 즉시 튕겨줍니다.
+    setCurrentTab(newBook.status === 'finished' ? 'tower' : 'desk'); 
   };
 
   if (isLoadingAuth) {
@@ -153,11 +157,13 @@ export default function App() {
         @import url('https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&family=Noto+Sans+KR:wght@400;600;700;900&display=swap');
         * { touch-action: manipulation; }
         .handwriting-title { font-family: 'Nanum Pen Script', cursive; font-size: 2.2rem; letter-spacing: 0.5px; }
+        
+        /* 1번 수정: sketch-border에서 강제 흰색 배경색 제거 */
         .sketch-border { 
           border: 2px solid #451A03; 
           border-radius: 255px 15px 225px 15px/15px 225px 15px 255px; 
-          background-color: #FDFBF7;
         }
+        
         .book-spine-solid { 
           border: 2px solid #451A03; 
           border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
@@ -184,7 +190,7 @@ export default function App() {
           <h1 className="text-[#451A03] font-bold handwriting-title mt-1.5">지산의 서재</h1>
         </div>
         {(currentTab === 'detail' || currentTab === 'addForm') && (
-          <button onClick={() => setCurrentTab('tower')} className="text-xs font-bold text-[#451A03] bg-white px-3 py-1.5 rounded-full sketch-border flex items-center hover:bg-[#FDE047] transition-colors shadow-sm">
+          <button onClick={() => setCurrentTab('tower')} className="text-xs font-bold text-[#451A03] bg-white px-3 py-1.5 rounded-full sketch-border flex items-center hover:bg-[#FDE047] transition-colors shadow-sm cursor-pointer">
             <ChevronLeft className="w-4 h-4 mr-0.5" /> 메인으로
           </button>
         )}
@@ -194,8 +200,13 @@ export default function App() {
         {currentTab === 'tower' && <BookTowerView books={books} onSelect={(b: any) => { setSelectedBook(b); setCurrentTab('detail'); }} onAdd={()=>setCurrentTab('search')} />}
         {currentTab === 'desk' && <DeskView books={books} onSelect={(b: any) => { setSelectedBook(b); setCurrentTab('detail'); }} user={user} setTab={setCurrentTab} />}
         {currentTab === 'search' && <BookSearchView kakaoApiKey={kakaoApiKey} apiKey={apiKey} onSelectForAdd={(b: any) => { setSelectedBook(b); setCurrentTab('addForm'); }} />}
+        
+        {/* 6. 책 정보 폼 라우팅 */}
         {currentTab === 'addForm' && <BookAddFormView user={user} initialBook={selectedBook} onSaved={handleBookAdd} />}
-        {currentTab === 'detail' && <BookDetailView user={user} book={selectedBook} apiKey={apiKey} onClose={() => setCurrentTab(selectedBook?.status === 'reading' ? 'desk' : 'tower')} />}
+        
+        {/* 7. 고유 key 부여를 통해 데이터 꼬임 방지 & 진입 차단 완벽 해결 */}
+        {currentTab === 'detail' && selectedBook && <BookDetailView key={selectedBook.id} user={user} book={selectedBook} apiKey={apiKey} onClose={() => setCurrentTab(selectedBook?.status === 'reading' ? 'desk' : 'tower')} />}
+        
         {currentTab === 'record' && <RecordView books={books} />}
         {currentTab === 'settings' && <SettingsView apiKey={apiKey} kakaoApiKey={kakaoApiKey} saveKeysToDb={saveKeysToDb} />}
       </main>
@@ -212,7 +223,7 @@ export default function App() {
 }
 
 const NavBtn = ({ icon, label, active, onClick, isPrimary = false }: { icon: any, label?: string, active: boolean, onClick: () => void, isPrimary?: boolean }) => (
-  <button onClick={onClick} className={`flex flex-col items-center transition-transform active:scale-95 ${isPrimary ? '-mt-7' : ''}`}>
+  <button onClick={onClick} className={`flex flex-col items-center transition-transform active:scale-95 cursor-pointer ${isPrimary ? '-mt-7' : ''}`}>
     <div className={`p-2.5 rounded-2xl flex items-center justify-center ${isPrimary ? 'bg-[#FDE047] sketch-border shadow-[2px_3px_0px_rgba(69,26,3,1)] hover:bg-[#FCD34D]' : active ? 'text-[#451A03] bg-stone-200/40 sketch-border' : 'text-[#451A03]/40'}`}>
       {icon}
     </div>
@@ -242,9 +253,9 @@ const BookTowerView = ({ books, onSelect, onAdd }: { books: any[], onSelect: any
   return (
     <div className="flex flex-col items-center min-h-[75vh] pb-10 animate-in fade-in">
       <div className="flex gap-2 mb-4 w-full">
-        <button onClick={()=>setFilter('all')} className={`flex-1 py-2 rounded-xl sketch-border text-xs font-bold ${filter==='all'?'bg-white shadow-[2px_2px_0px_#451A03]':'bg-transparent text-[#451A03]/40 border-dashed'}`}>전체보기</button>
-        <button onClick={()=>setFilter('month')} className={`flex-1 py-2 rounded-xl sketch-border text-xs font-bold ${filter==='month'?'bg-white shadow-[2px_2px_0px_#451A03]':'bg-transparent text-[#451A03]/40 border-dashed'}`}>이번 달</button>
-        <button onClick={()=>setFilter('year')} className={`flex-1 py-2 rounded-xl sketch-border text-xs font-bold ${filter==='year'?'bg-white shadow-[2px_2px_0px_#451A03]':'bg-transparent text-[#451A03]/40 border-dashed'}`}>올해</button>
+        <button onClick={()=>setFilter('all')} className={`flex-1 py-2 rounded-xl sketch-border text-xs font-bold cursor-pointer ${filter==='all'?'bg-white shadow-[2px_2px_0px_#451A03]':'bg-transparent text-[#451A03]/40 border-dashed'}`}>전체보기</button>
+        <button onClick={()=>setFilter('month')} className={`flex-1 py-2 rounded-xl sketch-border text-xs font-bold cursor-pointer ${filter==='month'?'bg-white shadow-[2px_2px_0px_#451A03]':'bg-transparent text-[#451A03]/40 border-dashed'}`}>이번 달</button>
+        <button onClick={()=>setFilter('year')} className={`flex-1 py-2 rounded-xl sketch-border text-xs font-bold cursor-pointer ${filter==='year'?'bg-white shadow-[2px_2px_0px_#451A03]':'bg-transparent text-[#451A03]/40 border-dashed'}`}>올해</button>
       </div>
 
       <div className="w-full bg-white sketch-border p-5 mb-8 flex items-center justify-between shadow-[3px_3px_0px_rgba(69,26,3,0.1)]">
@@ -260,7 +271,7 @@ const BookTowerView = ({ books, onSelect, onAdd }: { books: any[], onSelect: any
         </div>
       </div>
 
-      <button onClick={onAdd} className="w-full bg-[#FDE047] sketch-border py-4 mb-6 rounded-2xl font-black text-[#451A03] shadow-[3px_3px_0px_#451A03] flex items-center justify-center gap-2 hover:bg-[#FCD34D] transition-transform active:translate-y-1 active:shadow-none">
+      <button onClick={onAdd} className="w-full bg-[#FDE047] sketch-border py-4 mb-6 rounded-2xl font-black text-[#451A03] shadow-[3px_3px_0px_#451A03] flex items-center justify-center gap-2 hover:bg-[#FCD34D] transition-transform active:translate-y-1 active:shadow-none cursor-pointer">
         <Plus className="w-5 h-5"/> 책 추가하기
       </button>
 
@@ -332,7 +343,7 @@ const DeskView = ({ books, onSelect, user, setTab }: { books: any[], onSelect: a
         <div className="text-center text-[#451A03]/60 flex flex-col items-center p-8 bg-white/50 sketch-border border-dashed rounded-3xl mt-10">
           <BookOpen className="w-10 h-10 mb-3 opacity-40" />
           <p className="font-bold text-sm mb-4">지금 읽고 있는 책이 없어요.</p>
-          <button onClick={() => setTab('search')} className="text-xs bg-white sketch-border px-4 py-2 font-bold hover:bg-[#FDE047]">새 책 꺼내기</button>
+          <button onClick={() => setTab('search')} className="text-xs bg-white sketch-border px-4 py-2 font-bold hover:bg-[#FDE047] cursor-pointer">새 책 꺼내기</button>
         </div>
       ) : (
         <div className="space-y-4">
@@ -349,8 +360,8 @@ const DeskView = ({ books, onSelect, user, setTab }: { books: any[], onSelect: a
                 </div>
               </div>
               <div className="flex gap-2 border-t-2 border-dashed border-[#451A03]/10 pt-3">
-                <button onClick={() => setAbandonModal(book)} className="flex-1 py-2 text-xs font-bold text-[#451A03]/60 hover:bg-stone-100 rounded-xl transition-colors">포기할래요 🏳️</button>
-                <button onClick={() => onSelect(book)} className="flex-1 py-2 text-xs font-bold bg-[#FDE047] text-[#451A03] sketch-border shadow-[2px_2px_0px_#451A03] rounded-xl hover:bg-[#FCD34D] active:translate-y-0.5 active:shadow-none transition-all">기록하기 ✏️</button>
+                <button onClick={() => setAbandonModal(book)} className="flex-1 py-2 text-xs font-bold text-[#451A03]/60 bg-white hover:bg-stone-100 rounded-xl transition-colors cursor-pointer">포기할래요 🏳️</button>
+                <button onClick={() => onSelect(book)} className="flex-1 py-2 text-xs font-bold bg-[#FDE047] text-[#451A03] sketch-border shadow-[2px_2px_0px_#451A03] rounded-xl hover:bg-[#FCD34D] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer">기록하기 ✏️</button>
               </div>
             </div>
           ))}
@@ -365,16 +376,16 @@ const DeskView = ({ books, onSelect, user, setTab }: { books: any[], onSelect: a
             <div className="space-y-3 mb-5">
               <div>
                 <label className="block text-xs font-bold mb-1">어디까지 읽으셨나요? (쪽)</label>
-                <input type="number" inputMode="numeric" value={currentPage} onChange={e=>setCurrentPage(e.target.value)} className="w-full p-2.5 sketch-border text-sm" placeholder="예: 45" />
+                <input type="number" inputMode="numeric" value={currentPage} onChange={e=>setCurrentPage(e.target.value)} className="w-full p-2.5 bg-white sketch-border text-sm" placeholder="예: 45" />
               </div>
               <div>
                 <label className="block text-xs font-bold mb-1">덮어두는 이유 (선택)</label>
-                <input type="text" value={reason} onChange={e=>setReason(e.target.value)} className="w-full p-2.5 sketch-border text-sm" placeholder="내용이 어려워서, 지루해서..." />
+                <input type="text" value={reason} onChange={e=>setReason(e.target.value)} className="w-full p-2.5 bg-white sketch-border text-sm" placeholder="내용이 어려워서, 지루해서..." />
               </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={()=>setAbandonModal(null)} className="flex-1 py-2.5 bg-white sketch-border text-xs font-bold hover:bg-stone-100">취소</button>
-              <button onClick={handleAbandon} className="flex-1 py-2.5 bg-red-100 border-2 border-red-300 rounded-xl text-xs font-bold text-red-700 hover:bg-red-200">서재로 보내기</button>
+              <button onClick={()=>setAbandonModal(null)} className="flex-1 py-2.5 bg-white sketch-border text-xs font-bold hover:bg-stone-100 cursor-pointer">취소</button>
+              <button onClick={handleAbandon} className="flex-1 py-2.5 bg-red-100 border-2 border-red-300 rounded-xl text-xs font-bold text-red-700 hover:bg-red-200 cursor-pointer">서재로 보내기</button>
             </div>
           </div>
         </div>
@@ -387,6 +398,7 @@ const BookSearchView = ({ kakaoApiKey, apiKey, onSelectForAdd }: { kakaoApiKey: 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false); // 2. AI 쪽수 확인 로딩 상태 추가
   
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
@@ -427,18 +439,24 @@ const BookSearchView = ({ kakaoApiKey, apiKey, onSelectForAdd }: { kakaoApiKey: 
     let pageCount = 250;
     let isAiFound = false;
 
+    // AI 쪽수 확인 중임을 화면에 표시
+    setIsExtracting(true);
+
     if (apiKey) {
       try {
-        const prompt = `책 제목: "${book.title}", 저자: "${book.authors}", 출판사: "${book.publisher}". 이 책의 정확한 총 페이지(쪽수)를 숫자만 반환해줘. 모르면 250이라고 해.`;
+        const prompt = `책 제목: "${book.title}", 저자: "${book.authors}", 출판사: "${book.publisher}". 이 책의 정확한 총 페이지(쪽수)를 숫자만 반환해줘. 설명 없이 오직 숫자(예: 320)만 답해. 모르면 250이라고 해.`;
         const resText = await callGeminiAPI(prompt, apiKey);
         const match = resText?.match(/\d+/);
         if (match) {
           pageCount = parseInt(match[0], 10);
           isAiFound = true;
         }
-      } catch(e) {}
+      } catch(e) {
+        console.error("AI 쪽수 분석 오류:", e);
+      }
     }
 
+    setIsExtracting(false);
     onSelectForAdd({ ...book, pageCount, isAiFound });
   };
 
@@ -462,6 +480,11 @@ const BookSearchView = ({ kakaoApiKey, apiKey, onSelectForAdd }: { kakaoApiKey: 
           
           {isSearching ? (
             <div className="flex justify-center py-12"><Loader2 className="animate-spin text-[#FDE047]" /></div>
+          ) : isExtracting ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-4 bg-white/50 sketch-border border-dashed">
+               <Loader2 className="animate-spin text-[#FDE047] w-10 h-10" />
+               <p className="text-sm font-bold text-[#451A03]/70">AI가 책의 쪽수를 확인하고 있습니다...</p>
+            </div>
           ) : (
             <div className="space-y-3">
               {results.map((book) => (
@@ -471,7 +494,7 @@ const BookSearchView = ({ kakaoApiKey, apiKey, onSelectForAdd }: { kakaoApiKey: 
                     <h3 className="font-bold text-sm truncate">{book.title}</h3>
                     <p className="text-[11px] text-[#451A03]/60 truncate mt-1">{book.authors} | {book.publisher}</p>
                   </div>
-                  <button onClick={() => handleSelect(book)} className="bg-[#FDE047] text-[#451A03] sketch-border shadow-[2px_2px_0px_#451A03] px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-[#FCD34D] active:translate-y-0.5 active:shadow-none whitespace-nowrap">
+                  <button onClick={() => handleSelect(book)} className="bg-[#FDE047] text-[#451A03] sketch-border shadow-[2px_2px_0px_#451A03] px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-[#FCD34D] active:translate-y-0.5 active:shadow-none whitespace-nowrap cursor-pointer">
                     선택
                   </button>
                 </div>
@@ -490,7 +513,7 @@ const BookAddFormView = ({ user, initialBook, onSaved }: { user: any, initialBoo
     displayTitle: initialBook?.title || '',
     authors: initialBook?.authors || '',
     publisher: initialBook?.publisher || '',
-    pageCount: initialBook?.pageCount || 250,
+    pageCount: initialBook?.pageCount || 250, // 5. 즉시 쪽수 동기화 바인딩 
     spineColor: getRandomColor(),
     textColor: '#451A03',
     format: '종이책',
@@ -501,30 +524,47 @@ const BookAddFormView = ({ user, initialBook, onSaved }: { user: any, initialBoo
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async (status: string) => {
-    if(!user) return;
+    if(!user) {
+      alert("데이터를 저장할 수 없습니다. (네트워크/로그인 확인 필요)");
+      return;
+    }
     setIsSaving(true);
-    const newBookRef = doc(collection(db, 'users', user.uid, 'books'));
-    const finalBook = {
-      ...bookData,
-      id: newBookRef.id,
-      status,
-      rating: 0,
-      review: '',
-      noteHtml: '',
-      createdAt: Date.now()
-    };
-    
-    await setDoc(newBookRef, finalBook);
-    setIsSaving(false);
-    onSaved(finalBook);
+    try {
+      const newBookRef = doc(collection(db, 'users', user.uid, 'books'));
+      const finalBook = {
+        ...bookData,
+        id: newBookRef.id,
+        status,
+        rating: 0,
+        review: '',
+        noteHtml: '',
+        createdAt: Date.now()
+      };
+      
+      await setDoc(newBookRef, finalBook);
+      setIsSaving(false);
+      onSaved(finalBook);
+    } catch(e) {
+      console.error("Save Error:", e);
+      alert("저장에 실패했습니다. 다시 시도해 주세요.");
+      setIsSaving(false);
+    }
   };
 
   return (
     <div className="animate-in fade-in pb-10 max-w-sm mx-auto">
-      <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><BookKey className="w-5 h-5 text-[#FDE047]"/> 책 정보 맞추기</h2>
+      {/* 3. 책 정보 맞추기 -> 책 정보 작성하기 문구 변경 */}
+      <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><BookKey className="w-5 h-5 text-[#FDE047]"/> 책 정보 작성하기</h2>
       
       <div className="bg-white p-5 sketch-border space-y-5 shadow-[3px_3px_0px_rgba(69,26,3,0.05)]">
-        <div className="flex justify-center mb-6">
+        
+        {/* 4. 썸네일 표지 노출 (스포이드 참조용) */}
+        <div className="flex flex-col items-center justify-center mb-6 gap-4">
+          {bookData.thumbnail ? (
+            <img src={bookData.thumbnail} alt="cover preview" className="w-24 h-36 object-cover rounded shadow-md border border-[#451A03]/10" />
+          ) : (
+            <div className="w-24 h-36 bg-stone-100 rounded border border-[#451A03]/10 flex items-center justify-center text-xs text-[#451A03]/50">표지 없음</div>
+          )}
           <div className="book-spine-solid flex items-center justify-center" style={{ backgroundColor: bookData.spineColor, width: '90%', height: '40px' }}>
              <span className="font-bold text-sm truncate px-4" style={{ color: bookData.textColor }}>{bookData.displayTitle || bookData.title}</span>
           </div>
@@ -532,26 +572,27 @@ const BookAddFormView = ({ user, initialBook, onSaved }: { user: any, initialBoo
 
         <div>
           <label className="block text-xs font-bold mb-1.5 text-[#451A03]/70">책등에 표시할 제목 (길면 줄여주세요)</label>
-          <input type="text" value={bookData.displayTitle} onChange={e=>setBookData({...bookData, displayTitle: e.target.value})} className="w-full p-2.5 sketch-border text-sm font-bold" />
+          <input type="text" value={bookData.displayTitle} onChange={e=>setBookData({...bookData, displayTitle: e.target.value})} className="w-full p-2.5 bg-white sketch-border text-sm font-bold" />
         </div>
 
         <div className="flex gap-4">
           <div className="flex-1">
             <label className="block text-xs font-bold mb-1.5 text-[#451A03]/70">책등 배경색 🎨</label>
-            <input type="color" value={bookData.spineColor} onChange={e=>setBookData({...bookData, spineColor: e.target.value})} className="w-full h-10 sketch-border p-1 cursor-pointer" />
+            <input type="color" value={bookData.spineColor} onChange={e=>setBookData({...bookData, spineColor: e.target.value})} className="w-full h-10 bg-white sketch-border p-1 cursor-pointer" />
           </div>
           <div className="flex-1">
             <label className="block text-xs font-bold mb-1.5 text-[#451A03]/70">글자색</label>
-            <input type="color" value={bookData.textColor} onChange={e=>setBookData({...bookData, textColor: e.target.value})} className="w-full h-10 sketch-border p-1 cursor-pointer" />
+            <input type="color" value={bookData.textColor} onChange={e=>setBookData({...bookData, textColor: e.target.value})} className="w-full h-10 bg-white sketch-border p-1 cursor-pointer" />
           </div>
         </div>
 
         <div>
           <label className="block text-xs font-bold mb-1.5 text-[#451A03]/70">총 페이지 수 (두께 계산용)</label>
-          <input type="number" inputMode="numeric" value={bookData.pageCount} onChange={e=>setBookData({...bookData, pageCount: Number(e.target.value)})} className="w-full p-2.5 sketch-border text-sm" />
+          <input type="number" inputMode="numeric" value={bookData.pageCount} onChange={e=>setBookData({...bookData, pageCount: Number(e.target.value)})} className="w-full p-2.5 bg-white sketch-border text-sm" />
           {initialBook?.isAiFound && <p className="text-[10px] text-[#451A03]/50 mt-1 font-bold">💡 AI가 자동 검색한 쪽수입니다. 맞는지 확인해주세요!</p>}
         </div>
 
+        {/* 6. 버튼 터치 무반응 해소를 위한 커서 및 타입 안정화 */}
         <div className="pt-4 border-t-2 border-dashed border-[#451A03]/10 flex flex-col gap-3">
           <button onClick={() => handleSave('finished')} disabled={isSaving} className="w-full bg-[#FDE047] sketch-border py-3.5 font-black shadow-[2px_2px_0px_#451A03] hover:bg-[#FCD34D] flex items-center justify-center gap-2 cursor-pointer">
             {isSaving ? <Loader2 className="w-4 h-4 animate-spin"/> : <CheckCircle2 className="w-4 h-4"/>} 다 읽은 책으로 추가 (서재로)
@@ -577,15 +618,20 @@ const BookDetailView = ({ user, book, apiKey, onClose }: { user: any, book: any,
 
   const handleSave = async () => {
     if(!user || !book) return;
-    const currentHtml = editorRef.current ? editorRef.current.innerHTML : noteHtml;
-    const bookRef = doc(db, 'users', user.uid, 'books', book.id);
-    await setDoc(bookRef, {
-      noteHtml: currentHtml, rating, review, startDate, endDate
-    }, { merge: true });
-    
-    setNoteHtml(currentHtml);
-    setIsSavedMsg(true);
-    setTimeout(() => { setIsSavedMsg(false); onClose(); }, 800);
+    try {
+      const currentHtml = editorRef.current ? editorRef.current.innerHTML : noteHtml;
+      const bookRef = doc(db, 'users', user.uid, 'books', book.id);
+      await setDoc(bookRef, {
+        noteHtml: currentHtml, rating, review, startDate, endDate
+      }, { merge: true });
+      
+      setNoteHtml(currentHtml);
+      setIsSavedMsg(true);
+      setTimeout(() => { setIsSavedMsg(false); onClose(); }, 800);
+    } catch(e) {
+      console.error(e);
+      alert("기록 저장 중 문제가 발생했습니다.");
+    }
   };
 
   const handleDelete = async () => {
@@ -600,6 +646,8 @@ const BookDetailView = ({ user, book, apiKey, onClose }: { user: any, book: any,
     await setDoc(doc(db, 'users', user.uid, 'books', book.id), { status: 'reading', endDate: '' }, { merge: true });
     onClose();
   };
+
+  if (!book) return null; // 7. 책이 누락된 상태에서 렌더링 에러 차단
 
   return (
     <div className="animate-in fade-in flex flex-col h-[calc(100vh-130px)] max-w-xl mx-auto">
@@ -636,16 +684,16 @@ const BookDetailView = ({ user, book, apiKey, onClose }: { user: any, book: any,
             </div>
             <div>
               <label className="block text-xs font-bold mb-1.5">한줄평</label>
-              <input type="text" inputMode="text" value={review} onChange={e=>setReview(e.target.value)} placeholder="이 책을 한 줄로 표현해 보세요" className="w-full p-3 sketch-border text-sm" />
+              <input type="text" inputMode="text" value={review} onChange={e=>setReview(e.target.value)} placeholder="이 책을 한 줄로 표현해 보세요" className="w-full p-3 bg-white sketch-border text-sm" />
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
                 <label className="block text-[11px] font-bold mb-1.5">읽기 시작한 날</label>
-                <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="w-full p-2 sketch-border text-xs" />
+                <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="w-full p-2 bg-white sketch-border text-xs" />
               </div>
               <div className="flex-1">
                 <label className="block text-[11px] font-bold mb-1.5">다 읽은 날</label>
-                <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} disabled={book.status==='reading'} className="w-full p-2 sketch-border text-xs disabled:opacity-50" />
+                <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} disabled={book.status==='reading'} className="w-full p-2 bg-white sketch-border text-xs disabled:opacity-50" />
               </div>
             </div>
             
@@ -752,7 +800,7 @@ const NoteEditor = ({ apiKey, initialHtml, editorRef }: { apiKey: string, initia
           <Camera className="w-3.5 h-3.5"/> 사진 밑줄
         </button>
       </div>
-      <div ref={editorRef} contentEditable className="flex-1 p-4 overflow-y-auto text-sm focus:outline-none leading-relaxed" {...{ 'data-placeholder': '노트를 작성해보세요...' } as any} />
+      <div ref={editorRef} contentEditable className="flex-1 p-4 bg-white overflow-y-auto text-sm focus:outline-none leading-relaxed" {...{ 'data-placeholder': '노트를 작성해보세요...' } as any} />
       {isOcrLoading && <div className="absolute inset-0 bg-white/80 flex items-center justify-center"><Loader2 className="animate-spin text-[#FDE047] w-6 h-6"/></div>}
     </div>
   );
@@ -776,11 +824,11 @@ const SettingsView = ({ apiKey, kakaoApiKey, saveKeysToDb }: { apiKey: string, k
       <div className="bg-white p-5 sketch-border space-y-4">
         <div>
           <label className="block text-xs font-bold mb-1.5">카카오 도서 검색 API 키</label>
-          <input type="text" value={kKey} onChange={e=>setKKey(e.target.value)} className="w-full p-3 sketch-border text-xs font-mono bg-stone-50" placeholder="REST API 키" />
+          <input type="text" value={kKey} onChange={e=>setKKey(e.target.value)} className="w-full p-3 bg-white sketch-border text-xs font-mono" placeholder="REST API 키" />
         </div>
         <div>
           <label className="block text-xs font-bold mb-1.5">Gemini AI API 키 (자동 쪽수/OCR용)</label>
-          <input type="password" value={gKey} onChange={e=>setGKey(e.target.value)} className="w-full p-3 sketch-border text-xs font-mono bg-stone-50" />
+          <input type="password" value={gKey} onChange={e=>setGKey(e.target.value)} className="w-full p-3 bg-white sketch-border text-xs font-mono" />
         </div>
         <button onClick={handleSave} className="w-full bg-[#451A03] text-[#FDFBF7] py-3.5 sketch-border font-bold shadow-[2px_2px_0px_#FDE047] active:translate-y-0.5 transition-all mt-2 cursor-pointer">
           {saved ? '✔️ 기기 & 서버에 저장 완료' : '키 저장하기'}
