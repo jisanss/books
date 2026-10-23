@@ -179,9 +179,9 @@ export default function App() {
       `}</style>
 
       <header className="sticky top-0 bg-[#FDFBF7]/95 backdrop-blur-md z-30 p-4 flex justify-between items-center max-w-2xl mx-auto border-b-2 border-[#451A03]/10">
-        <div className="flex items-center gap-2" onClick={()=>setCurrentTab('tower')}>
+        <div className="flex items-center gap-2 cursor-pointer" onClick={()=>setCurrentTab('tower')}>
           <BookStackLogo />
-          <h1 className="text-[#451A03] font-bold handwriting-title mt-1.5 cursor-pointer">지산의 서재</h1>
+          <h1 className="text-[#451A03] font-bold handwriting-title mt-1.5">지산의 서재</h1>
         </div>
         {(currentTab === 'detail' || currentTab === 'addForm') && (
           <button onClick={() => setCurrentTab('tower')} className="text-xs font-bold text-[#451A03] bg-white px-3 py-1.5 rounded-full sketch-border flex items-center hover:bg-[#FDE047] transition-colors shadow-sm">
@@ -553,10 +553,10 @@ const BookAddFormView = ({ user, initialBook, onSaved }: { user: any, initialBoo
         </div>
 
         <div className="pt-4 border-t-2 border-dashed border-[#451A03]/10 flex flex-col gap-3">
-          <button onClick={() => handleSave('finished')} disabled={isSaving} className="w-full bg-[#FDE047] sketch-border py-3.5 font-black shadow-[2px_2px_0px_#451A03] hover:bg-[#FCD34D] flex items-center justify-center gap-2">
+          <button onClick={() => handleSave('finished')} disabled={isSaving} className="w-full bg-[#FDE047] sketch-border py-3.5 font-black shadow-[2px_2px_0px_#451A03] hover:bg-[#FCD34D] flex items-center justify-center gap-2 cursor-pointer">
             {isSaving ? <Loader2 className="w-4 h-4 animate-spin"/> : <CheckCircle2 className="w-4 h-4"/>} 다 읽은 책으로 추가 (서재로)
           </button>
-          <button onClick={() => handleSave('reading')} disabled={isSaving} className="w-full bg-white sketch-border py-3.5 font-bold hover:bg-stone-50 flex items-center justify-center gap-2 text-[#451A03]/80">
+          <button onClick={() => handleSave('reading')} disabled={isSaving} className="w-full bg-white sketch-border py-3.5 font-bold hover:bg-stone-50 flex items-center justify-center gap-2 text-[#451A03]/80 cursor-pointer">
             📖 읽기 시작할 책으로 추가 (내 책상으로)
           </button>
         </div>
@@ -605,7 +605,7 @@ const BookDetailView = ({ user, book, apiKey, onClose }: { user: any, book: any,
     <div className="animate-in fade-in flex flex-col h-[calc(100vh-130px)] max-w-xl mx-auto">
       <div className="flex justify-between items-center mb-4">
         <h2 className="font-black text-lg truncate flex-1 pr-2">{book.title}</h2>
-        <button onClick={handleSave} className="bg-[#FDE047] sketch-border px-4 py-2 text-xs font-black shadow-[2px_2px_0px_#451A03] hover:bg-[#FCD34D] flex items-center gap-1">
+        <button onClick={handleSave} className="bg-[#FDE047] sketch-border px-4 py-2 text-xs font-black shadow-[2px_2px_0px_#451A03] hover:bg-[#FCD34D] flex items-center gap-1 cursor-pointer">
           {isSavedMsg ? "저장 완료! ✔️" : <><Save className="w-3.5 h-3.5"/> 기록 저장</>}
         </button>
       </div>
@@ -651,9 +651,9 @@ const BookDetailView = ({ user, book, apiKey, onClose }: { user: any, book: any,
             
             <div className="pt-4 border-t-2 border-dashed border-[#451A03]/10 space-y-2">
               {book.status === 'abandoned' && (
-                <button onClick={handleRestart} className="w-full py-3 bg-stone-100 sketch-border text-xs font-bold hover:bg-stone-200">📖 다시 읽기 (내 책상으로)</button>
+                <button onClick={handleRestart} className="w-full py-3 bg-stone-100 sketch-border text-xs font-bold hover:bg-stone-200 cursor-pointer">📖 다시 읽기 (내 책상으로)</button>
               )}
-              <button onClick={handleDelete} className="w-full py-3 bg-red-50 text-red-600 sketch-border text-xs font-bold hover:bg-red-100">🗑️ 이 기록 삭제하기</button>
+              <button onClick={handleDelete} className="w-full py-3 bg-red-50 text-red-600 sketch-border text-xs font-bold hover:bg-red-100 cursor-pointer">🗑️ 이 기록 삭제하기</button>
             </div>
           </div>
         )}
@@ -679,7 +679,7 @@ const BookDetailView = ({ user, book, apiKey, onClose }: { user: any, book: any,
 };
 
 const TabBtn = ({ active, onClick, label }: { active: boolean, onClick: any, label: string }) => (
-  <button onClick={onClick} className={`flex-1 py-2.5 sketch-border text-xs font-bold transition-colors ${active ? 'bg-[#451A03] text-[#FDFBF7]' : 'bg-white text-[#451A03]/60'}`}>
+  <button onClick={onClick} className={`flex-1 py-2.5 sketch-border text-xs font-bold transition-colors cursor-pointer ${active ? 'bg-[#451A03] text-[#FDFBF7]' : 'bg-white text-[#451A03]/60'}`}>
     {label}
   </button>
 );
@@ -744,11 +744,11 @@ const NoteEditor = ({ apiKey, initialHtml, editorRef }: { apiKey: string, initia
   return (
     <div className="flex flex-col h-full bg-white sketch-border overflow-hidden relative shadow-[2px_2px_0px_rgba(69,26,3,0.05)]">
       <div className="bg-stone-50 border-b-2 border-[#451A03]/10 p-2 flex gap-2 items-center">
-        <button onClick={()=>execCmd('bold')} className="p-1.5 bg-white sketch-border text-xs font-bold">B</button>
-        <button onClick={()=>execCmd('hiliteColor', '#FEF08A')} className="p-1.5 bg-[#FEF08A] sketch-border text-xs font-bold">형광펜</button>
+        <button onClick={()=>execCmd('bold')} className="p-1.5 bg-white sketch-border text-xs font-bold cursor-pointer">B</button>
+        <button onClick={()=>execCmd('hiliteColor', '#FEF08A')} className="p-1.5 bg-[#FEF08A] sketch-border text-xs font-bold cursor-pointer">형광펜</button>
         <div className="flex-1"></div>
         <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleOcr} />
-        <button onClick={()=>fileInputRef.current?.click()} className="p-1.5 flex items-center gap-1 bg-stone-100 sketch-border text-[10px] font-bold">
+        <button onClick={()=>fileInputRef.current?.click()} className="p-1.5 flex items-center gap-1 bg-stone-100 sketch-border text-[10px] font-bold cursor-pointer">
           <Camera className="w-3.5 h-3.5"/> 사진 밑줄
         </button>
       </div>
@@ -782,7 +782,7 @@ const SettingsView = ({ apiKey, kakaoApiKey, saveKeysToDb }: { apiKey: string, k
           <label className="block text-xs font-bold mb-1.5">Gemini AI API 키 (자동 쪽수/OCR용)</label>
           <input type="password" value={gKey} onChange={e=>setGKey(e.target.value)} className="w-full p-3 sketch-border text-xs font-mono bg-stone-50" />
         </div>
-        <button onClick={handleSave} className="w-full bg-[#451A03] text-[#FDFBF7] py-3.5 sketch-border font-bold shadow-[2px_2px_0px_#FDE047] active:translate-y-0.5 transition-all mt-2">
+        <button onClick={handleSave} className="w-full bg-[#451A03] text-[#FDFBF7] py-3.5 sketch-border font-bold shadow-[2px_2px_0px_#FDE047] active:translate-y-0.5 transition-all mt-2 cursor-pointer">
           {saved ? '✔️ 기기 & 서버에 저장 완료' : '키 저장하기'}
         </button>
       </div>
