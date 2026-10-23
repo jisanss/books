@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, getDoc } from 'firebase/firestore';
-import { Plus, Settings, Search, BookOpen, Calendar, CheckCircle2, Loader2, Save, Library, ChevronLeft, Camera, BookKey, MessageSquare } from 'lucide-react';
+import { Plus, Settings, Search, BookOpen, Calendar, CheckCircle2, Loader2, Save, Library, ChevronLeft, Camera, BookKey, MessageSquare, Sparkles } from 'lucide-react';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDEPLBPPaaJuaYCKwAZvQN4SakVsK28faQ",
@@ -18,7 +18,6 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// --- Constants ---
 const PAGE_THICKNESS_CM = 0.005; 
 const HEIGHT_COMPARISONS = [
   { max: 0, name: '아직 빈 책상', heightStr: '0cm', icon: '🪹' }, 
@@ -84,6 +83,25 @@ const callGeminiAPI = async (prompt: string, apiKey: string, imageBase64: string
   } catch(e) { 
     return null; 
   }
+};
+
+// 구글 도서 API로 쪽수 자동 조회 (AI 토큰 낭비 방지)
+const fetchPageCountFromGoogleBooks = async (title: string, authors: string) => {
+  try {
+    const query = `${title} ${authors}`.trim();
+    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    if (data.items && data.items.length > 0) {
+      for (const item of data.items) {
+        if (item.volumeInfo?.pageCount) {
+          return item.volumeInfo.pageCount;
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Google Books API Error:", e);
+  }
+  return 250; // 기본값
 };
 
 export default function App() {
@@ -213,9 +231,13 @@ export default function App() {
       </header>
 
       <main className="max-w-2xl mx-auto p-4 font-['Noto_Sans_KR']">
-        {currentTab === 'tower' && <BookTowerView books={books} onSelect={(b: any) => { setSelectedBook(b); setCurrentTab('detail'); }} onAdd={()=>setCurrentTab('search')} />}
+        {currentTab === 'tower' && <BookTowerView books={books} onSelect={(b: any) => { setSelectedBook(b); setCurrentTab('detail'); }} onAdd={()=>setCurrentTab('search')} apiKey={apiKey} />}
         {currentTab === 'desk' && <DeskView books={books} onSelect={(b: any) => { setSelectedBook(b); setCurrentTab('detail'); }} user={user} setTab={setCurrentTab} />}
-        {currentTab === 'search' && <BookSearchView kakaoApiKey={kakaoApiKey} onSelectForAdd={(b: any) => { setSelectedBook(b); setCurrentTab('addForm'); }} />}
+        {currentTab === 'search' && <BookSearchView kakaoApiKey={kakaoApiKey} onSelectForAdd={async (b: any) => {
+          const pages = await fetchPageCountFromGoogleBooks(b.title, b.authors);
+          setSelectedBook({ ...b, pageCount: pages });
+          setCurrentTab('addForm');
+        }} />}
         {currentTab === 'addForm' && <BookAddFormView user={user} initialBook={selectedBook} onSaved={handleBookAdd} />}
         {currentTab === 'detail' && selectedBook && <BookDetailView key={selectedBook.id} user={user} book={selectedBook} apiKey={apiKey} onClose={() => setCurrentTab(selectedBook?.status === 'reading' ? 'desk' : 'tower')} />}
         {currentTab === 'record' && <RecordView books={books} />}
@@ -242,9 +264,14 @@ const NavBtn = ({ icon, label, active, onClick, isPrimary = false }: { icon: any
   </button>
 );
 
-const BookTowerView = ({ books, onSelect, onAdd }: { books: any[], onSelect: any, onAdd: any }) => {
+const BookTowerView = ({ books, onSelect, onAdd, apiKey }: { books: any[], onSelect: any, onAdd: any, apiKey: string }) => {
   const [filter, setFilter] = useState('all'); 
+  const [recommendModal, setRecommendModal] = useState(false);
+  const [recommendText, setRecommendText] = useState('');
+  const [isRecLoading, setIsRecLoading] = useState(false);
+
   const displayBooks = books.filter(b => b.status === 'finished' || b.status === 'abandoned');
+  const finishedCount = books.filter(b => b.status === 'finished').length;
   
   const filteredBooks = displayBooks.filter(b => {
     if(filter === 'all') return true;
@@ -261,8 +288,33 @@ const BookTowerView = ({ books, onSelect, onAdd }: { books: any[], onSelect: any
   const totalHeight = totalPages * PAGE_THICKNESS_CM;
   const comp = HEIGHT_COMPARISONS.find(c => totalHeight <= c.max) || HEIGHT_COMPARISONS[HEIGHT_COMPARISONS.length - 1];
 
+  const handleAiRecommend = async () => {
+    if (!apiKey) {
+      alert("설정 탭에서 Gemini API 키를 먼저 입력해주세요!");
+      return;
+    }
+    setIsRecLoading(true);
+    setRecommendModal(true);
+    const finishedList = books.filter(b => b.status === 'finished').map(b => `${b.title} (${b.authors})`).join(', ');
+    const prompt = `사용자가 지금까지 완독한 책 목록이야: [${finishedList}]. 이 책들의 취향을 분석해서, 다음에 읽으면 좋을 책 3권을 재치 있는 한줄평과 함께 추천해줘. 친근한 말투로 대답해줘.`;
+    const res = await callGeminiAPI(prompt, apiKey);
+    setRecommendText(res || "추천을 불러오지 못했어요.");
+    setIsRecLoading(false);
+  };
+
   return (
     <div className="flex flex-col items-center min-h-[75vh] pb-10 animate-in fade-in">
+      {/* 5권 완독 달성 배너 */}
+      {finishedCount > 0 && finishedCount % 5 === 0 && (
+        <div className="w-full bg-[#FDE047] sketch-border p-4 mb-4 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-[#451A03]" />
+            <span className="text-xs font-black">완독 {finishedCount}권 달성! AI 추천 북을 받아보세요 ✨</span>
+          </div>
+          <button onClick={handleAiRecommend} className="bg-[#451A03] text-white px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer">추천받기</button>
+        </div>
+      )}
+
       <div className="flex gap-2 mb-4 w-full">
         <button onClick={()=>setFilter('all')} className={`flex-1 py-2 rounded-xl sketch-border text-xs font-bold cursor-pointer ${filter==='all'?'bg-white shadow-[2px_2px_0px_#451A03]':'bg-transparent text-[#451A03]/40 border-dashed'}`}>전체보기</button>
         <button onClick={()=>setFilter('month')} className={`flex-1 py-2 rounded-xl sketch-border text-xs font-bold cursor-pointer ${filter==='month'?'bg-white shadow-[2px_2px_0px_#451A03]':'bg-transparent text-[#451A03]/40 border-dashed'}`}>이번 달</button>
@@ -321,6 +373,19 @@ const BookTowerView = ({ books, onSelect, onAdd }: { books: any[], onSelect: any
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* AI 추천 모달 */}
+      {recommendModal && (
+        <div className="fixed inset-0 bg-[#451A03]/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[#FDFBF7] sketch-border p-6 w-full max-w-md shadow-xl flex flex-col max-h-[80vh]">
+            <h3 className="font-bold text-lg mb-3 flex items-center gap-2"><Sparkles className="w-5 h-5 text-[#451A03]" /> AI 맞춤 책 추천</h3>
+            <div className="flex-1 overflow-y-auto text-sm space-y-3 bg-white p-4 sketch-border mb-4 whitespace-pre-wrap leading-relaxed">
+              {isRecLoading ? <div className="flex justify-center py-8"><Loader2 className="animate-spin text-[#451A03]" /></div> : recommendText}
+            </div>
+            <button onClick={() => setRecommendModal(false)} className="w-full py-3 bg-[#FDE047] sketch-border font-bold text-xs cursor-pointer">닫기</button>
+          </div>
         </div>
       )}
     </div>
@@ -409,6 +474,7 @@ const BookSearchView = ({ kakaoApiKey, onSelectForAdd }: { kakaoApiKey: string, 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isPageLoading, setIsPageLoading] = useState(false);
   
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
@@ -445,9 +511,10 @@ const BookSearchView = ({ kakaoApiKey, onSelectForAdd }: { kakaoApiKey: string, 
     setIsSearching(false);
   };
 
-  const handleSelect = (book: any) => {
-    // AI 쪽수 강제 검색을 제거하고 기본값(250)을 제공하여 즉시 넘어가도록 수정
-    onSelectForAdd({ ...book, pageCount: 250, isAiFound: false });
+  const handleSelect = async (book: any) => {
+    setIsPageLoading(true);
+    await onSelectForAdd(book);
+    setIsPageLoading(false);
   };
 
   return (
@@ -468,8 +535,11 @@ const BookSearchView = ({ kakaoApiKey, onSelectForAdd }: { kakaoApiKey: string, 
             <Search className="absolute left-4 top-4 w-4 h-4 text-[#451A03]/40" />
           </div>
           
-          {isSearching ? (
-            <div className="flex justify-center py-12"><Loader2 className="animate-spin text-[#FDE047]" /></div>
+          {isSearching || isPageLoading ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <Loader2 className="animate-spin text-[#FDE047] w-8 h-8" />
+              <p className="text-xs font-bold text-[#451A03]/60">책 정보를 불러오는 중입니다...</p>
+            </div>
           ) : (
             <div className="space-y-3">
               {results.map((book) => (
@@ -571,7 +641,7 @@ const BookAddFormView = ({ user, initialBook, onSaved }: { user: any, initialBoo
         </div>
 
         <div>
-          <label className="block text-xs font-bold mb-1.5 text-[#451A03]/70">총 페이지 수 (직접 입력해 주세요)</label>
+          <label className="block text-xs font-bold mb-1.5 text-[#451A03]/70">총 페이지 수 (자동 연동됨)</label>
           <input type="number" inputMode="numeric" value={bookData.pageCount} onChange={e=>setBookData({...bookData, pageCount: Number(e.target.value)})} className="w-full p-2.5 bg-white sketch-border text-sm" />
         </div>
 
@@ -630,6 +700,14 @@ const BookDetailView = ({ user, book, apiKey, onClose }: { user: any, book: any,
   };
 
   if (!book) return null;
+
+  // 독서 노트에서 형광펜 문장 추출
+  const getHighlightSnippet = () => {
+    if (!noteHtml) return null;
+    const match = noteHtml.match(/background-color:\s*(?:#FEF08A|yellow|#fef08a)[^>]*>([^<]+)</i) || noteHtml.match(/<mark[^>]*>([^<]+)<\/mark>/i);
+    return match ? match[1] : null;
+  };
+  const highlightSnippet = getHighlightSnippet();
 
   return (
     <div className="animate-in fade-in flex flex-col h-[calc(100vh-130px)] max-w-xl mx-auto">
@@ -691,11 +769,12 @@ const BookDetailView = ({ user, book, apiKey, onClose }: { user: any, book: any,
 
         {activeTab === 'note' && <NoteEditor apiKey={apiKey} initialHtml={noteHtml} editorRef={editorRef} />}
 
+        {/* 영수증 스타일 방명록 (컬러 표지 및 형광펜 문구 연동) */}
         {activeTab === 'guestbook' && (
           <div className="p-4">
             <div className="receipt-paper p-6 mx-auto max-w-sm flex flex-col items-center">
                <h3 className="font-bold text-xl mb-4 border-b-2 border-dashed border-gray-400 pb-2 w-full text-center">RECEIPT</h3>
-               {book.thumbnail ? <img src={book.thumbnail} className="w-20 h-28 object-cover shadow-sm mb-4 grayscale hover:grayscale-0 transition-all" alt="cover"/> : <BookOpen className="w-12 h-12 text-gray-300 mb-4"/>}
+               {book.thumbnail ? <img src={book.thumbnail} className="w-20 h-28 object-cover shadow-sm mb-4" alt="cover"/> : <BookOpen className="w-12 h-12 text-gray-300 mb-4"/>}
                <h4 className="font-bold text-base mb-1 text-center w-full truncate">{book.title}</h4>
                <p className="text-xs text-gray-500 mb-4 text-center">{book.authors}</p>
                
@@ -710,18 +789,23 @@ const BookDetailView = ({ user, book, apiKey, onClose }: { user: any, book: any,
                  <span className="text-xs text-gray-500 block mb-1">REVIEW</span>
                  <p className="text-sm italic break-keep bg-gray-50 p-2 border border-gray-200">"{review || '기록된 한줄평이 없습니다.'}"</p>
                </div>
+
+               {highlightSnippet && (
+                 <div className="w-full text-left mt-4">
+                   <span className="text-xs text-amber-600 block mb-1 font-bold">✨ FAVORITE LINE</span>
+                   <p className="text-xs bg-amber-50 p-2 border border-amber-200 italic">"{highlightSnippet}"</p>
+                 </div>
+               )}
                
                <div className="w-full border-t-2 border-dashed border-gray-300 my-4"></div>
                
                <div className="text-center w-full">
-                 <p className="text-xs mb-1">THANK YOU FOR READING</p>
-                 <div className="text-4xl font-[barcode] tracking-widest mt-2 opacity-70">||||||||||||||||</div>
+                 <p className="text-xs text-gray-400">THANK YOU FOR READING</p>
                </div>
             </div>
           </div>
         )}
 
-        {/* 부활한 AI 독서모임 탭 */}
         {activeTab === 'aiChat' && <AIChatView apiKey={apiKey} book={book} noteHtml={noteHtml} review={review} />}
       </div>
     </div>
@@ -746,11 +830,10 @@ const AIChatView = ({ apiKey, book, noteHtml, review }: { apiKey: string, book: 
     setInput('');
     setIsTyping(true);
 
-    // AI에게 맥락 제공 (HTML 태그 제거 후 전달)
     const cleanNote = noteHtml.replace(/<[^>]*>?/gm, '');
     const contextPrompt = `너는 나와 "${book.title}"(저자: ${book.authors})라는 책으로 독서 모임을 진행하는 다정한 파트너야. 내가 남긴 독서 노트 내용: "${cleanNote}", 내 한줄평: "${review}". 이 정보와 나의 다음 대답을 바탕으로 1~2문장으로 짧고 친근하게 대화를 이어가줘. 다음은 내 대답이야: ${input}`;
 
-    const res = await callGeminiAPI(contextPrompt, apiKey, null, messages.slice(1)); // 첫인사 제외한 이전 대화 기록 전달
+    const res = await callGeminiAPI(contextPrompt, apiKey, null, messages.slice(1)); 
     if (res) {
       setMessages(prev => [...prev, { role: 'model', content: res }]);
     } else {
@@ -780,7 +863,7 @@ const AIChatView = ({ apiKey, book, noteHtml, review }: { apiKey: string, book: 
       </div>
       <div className="flex gap-2">
         <input type="text" value={input} onChange={e=>setInput(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleSend()} spellCheck="false" placeholder={apiKey ? "감상을 입력해주세요..." : "설정에서 API 키를 먼저 입력해주세요"} className="flex-1 p-3 bg-white sketch-border text-sm focus:outline-none" disabled={!apiKey || isTyping} />
-        <button onClick={handleSend} disabled={!input.trim() || !apiKey || isTyping} className="bg-[#451A03] text-white p-3 sketch-border disabled:opacity-50">
+        <button onClick={handleSend} disabled={!input.trim() || !apiKey || isTyping} className="bg-[#451A03] text-white p-3 sketch-border disabled:opacity-50 cursor-pointer">
           <MessageSquare className="w-5 h-5" />
         </button>
       </div>
@@ -894,7 +977,7 @@ const SettingsView = ({ apiKey, kakaoApiKey, saveKeysToDb }: { apiKey: string, k
           <input type="text" spellCheck="false" value={kKey} onChange={e=>setKKey(e.target.value)} className="w-full p-3 bg-white sketch-border text-xs font-mono" placeholder="REST API 키" />
         </div>
         <div>
-          <label className="block text-xs font-bold mb-1.5">Gemini AI API 키 (자동 쪽수/OCR용)</label>
+          <label className="block text-xs font-bold mb-1.5">Gemini AI API 키 (AI 독서모임/OCR용)</label>
           <input type="password" value={gKey} onChange={e=>setGKey(e.target.value)} className="w-full p-3 bg-white sketch-border text-xs font-mono" />
         </div>
         <button onClick={handleSave} className="w-full bg-[#451A03] text-[#FDFBF7] py-3.5 sketch-border font-bold shadow-[2px_2px_0px_#FDE047] active:translate-y-0.5 transition-all mt-2 cursor-pointer">
