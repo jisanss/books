@@ -78,7 +78,6 @@ const callGeminiAPI = async (prompt: string, apiKey: string, imageBase64: string
     const result = await response.json();
     return result.candidates?.[0]?.content?.parts?.[0]?.text || "";
   } catch(e) { 
-    console.error("Gemini API Error:", e);
     return null; 
   }
 };
@@ -143,7 +142,6 @@ export default function App() {
 
   const handleBookAdd = (newBook: any) => {
     setSelectedBook(newBook);
-    // 선택된 상태에 따라 올바른 탭으로 즉시 튕겨줍니다.
     setCurrentTab(newBook.status === 'finished' ? 'tower' : 'desk'); 
   };
 
@@ -158,7 +156,6 @@ export default function App() {
         * { touch-action: manipulation; }
         .handwriting-title { font-family: 'Nanum Pen Script', cursive; font-size: 2.2rem; letter-spacing: 0.5px; }
         
-        /* 1번 수정: sketch-border에서 강제 흰색 배경색 제거 */
         .sketch-border { 
           border: 2px solid #451A03; 
           border-radius: 255px 15px 225px 15px/15px 225px 15px 255px; 
@@ -182,6 +179,24 @@ export default function App() {
           border-radius: inherit; pointer-events: none;
         }
         input, textarea, [contenteditable] { font-family: 'Noto Sans KR', sans-serif; }
+        
+        /* 영수증 스타일 CSS */
+        .receipt-paper {
+          background-color: #ffffff;
+          border: 1px solid #d1d5db;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+          position: relative;
+          font-family: 'Courier New', Courier, monospace;
+          color: #374151;
+        }
+
+        /* 넷리파이 배너 강제 숨김 처리 */
+        #netlify-badge, a[href*="netlify.com"] {
+          display: none !important;
+          opacity: 0 !important;
+          visibility: hidden !important;
+          pointer-events: none !important;
+        }
       `}</style>
 
       <header className="sticky top-0 bg-[#FDFBF7]/95 backdrop-blur-md z-30 p-4 flex justify-between items-center max-w-2xl mx-auto border-b-2 border-[#451A03]/10">
@@ -200,13 +215,8 @@ export default function App() {
         {currentTab === 'tower' && <BookTowerView books={books} onSelect={(b: any) => { setSelectedBook(b); setCurrentTab('detail'); }} onAdd={()=>setCurrentTab('search')} />}
         {currentTab === 'desk' && <DeskView books={books} onSelect={(b: any) => { setSelectedBook(b); setCurrentTab('detail'); }} user={user} setTab={setCurrentTab} />}
         {currentTab === 'search' && <BookSearchView kakaoApiKey={kakaoApiKey} apiKey={apiKey} onSelectForAdd={(b: any) => { setSelectedBook(b); setCurrentTab('addForm'); }} />}
-        
-        {/* 6. 책 정보 폼 라우팅 */}
         {currentTab === 'addForm' && <BookAddFormView user={user} initialBook={selectedBook} onSaved={handleBookAdd} />}
-        
-        {/* 7. 고유 key 부여를 통해 데이터 꼬임 방지 & 진입 차단 완벽 해결 */}
         {currentTab === 'detail' && selectedBook && <BookDetailView key={selectedBook.id} user={user} book={selectedBook} apiKey={apiKey} onClose={() => setCurrentTab(selectedBook?.status === 'reading' ? 'desk' : 'tower')} />}
-        
         {currentTab === 'record' && <RecordView books={books} />}
         {currentTab === 'settings' && <SettingsView apiKey={apiKey} kakaoApiKey={kakaoApiKey} saveKeysToDb={saveKeysToDb} />}
       </main>
@@ -376,11 +386,11 @@ const DeskView = ({ books, onSelect, user, setTab }: { books: any[], onSelect: a
             <div className="space-y-3 mb-5">
               <div>
                 <label className="block text-xs font-bold mb-1">어디까지 읽으셨나요? (쪽)</label>
-                <input type="number" inputMode="numeric" value={currentPage} onChange={e=>setCurrentPage(e.target.value)} className="w-full p-2.5 bg-white sketch-border text-sm" placeholder="예: 45" />
+                <input type="number" inputMode="numeric" value={currentPage} onChange={e=>setCurrentPage(e.target.value)} spellCheck="false" className="w-full p-2.5 bg-white sketch-border text-sm" placeholder="예: 45" />
               </div>
               <div>
                 <label className="block text-xs font-bold mb-1">덮어두는 이유 (선택)</label>
-                <input type="text" value={reason} onChange={e=>setReason(e.target.value)} className="w-full p-2.5 bg-white sketch-border text-sm" placeholder="내용이 어려워서, 지루해서..." />
+                <input type="text" value={reason} onChange={e=>setReason(e.target.value)} spellCheck="false" className="w-full p-2.5 bg-white sketch-border text-sm" placeholder="내용이 어려워서, 지루해서..." />
               </div>
             </div>
             <div className="flex gap-2">
@@ -398,7 +408,7 @@ const BookSearchView = ({ kakaoApiKey, apiKey, onSelectForAdd }: { kakaoApiKey: 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [isExtracting, setIsExtracting] = useState(false); // 2. AI 쪽수 확인 로딩 상태 추가
+  const [isExtracting, setIsExtracting] = useState(false); 
   
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
@@ -439,7 +449,6 @@ const BookSearchView = ({ kakaoApiKey, apiKey, onSelectForAdd }: { kakaoApiKey: 
     let pageCount = 250;
     let isAiFound = false;
 
-    // AI 쪽수 확인 중임을 화면에 표시
     setIsExtracting(true);
 
     if (apiKey) {
@@ -474,7 +483,7 @@ const BookSearchView = ({ kakaoApiKey, apiKey, onSelectForAdd }: { kakaoApiKey: 
       ) : (
         <>
           <div className="relative mb-6">
-            <input type="text" inputMode="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="책 제목, 저자를 검색해 보세요" className="w-full bg-white sketch-border py-3.5 pl-11 pr-4 focus:outline-none focus:border-[#FDE047] text-sm" />
+            <input type="text" inputMode="text" spellCheck="false" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="책 제목, 저자를 검색해 보세요" className="w-full bg-white sketch-border py-3.5 pl-11 pr-4 focus:outline-none focus:border-[#FDE047] text-sm" />
             <Search className="absolute left-4 top-4 w-4 h-4 text-[#451A03]/40" />
           </div>
           
@@ -513,7 +522,7 @@ const BookAddFormView = ({ user, initialBook, onSaved }: { user: any, initialBoo
     displayTitle: initialBook?.title || '',
     authors: initialBook?.authors || '',
     publisher: initialBook?.publisher || '',
-    pageCount: initialBook?.pageCount || 250, // 5. 즉시 쪽수 동기화 바인딩 
+    pageCount: initialBook?.pageCount || 250, 
     spineColor: getRandomColor(),
     textColor: '#451A03',
     format: '종이책',
@@ -521,14 +530,15 @@ const BookAddFormView = ({ user, initialBook, onSaved }: { user: any, initialBoo
     endDate: new Date().toISOString().split('T')[0],
     thumbnail: initialBook?.thumbnail || null
   });
-  const [isSaving, setIsSaving] = useState(false);
+  
+  const [savingType, setSavingType] = useState<string | null>(null);
 
   const handleSave = async (status: string) => {
     if(!user) {
       alert("데이터를 저장할 수 없습니다. (네트워크/로그인 확인 필요)");
       return;
     }
-    setIsSaving(true);
+    setSavingType(status);
     try {
       const newBookRef = doc(collection(db, 'users', user.uid, 'books'));
       const finalBook = {
@@ -542,23 +552,21 @@ const BookAddFormView = ({ user, initialBook, onSaved }: { user: any, initialBoo
       };
       
       await setDoc(newBookRef, finalBook);
-      setIsSaving(false);
+      setSavingType(null);
       onSaved(finalBook);
     } catch(e) {
       console.error("Save Error:", e);
       alert("저장에 실패했습니다. 다시 시도해 주세요.");
-      setIsSaving(false);
+      setSavingType(null);
     }
   };
 
   return (
     <div className="animate-in fade-in pb-10 max-w-sm mx-auto">
-      {/* 3. 책 정보 맞추기 -> 책 정보 작성하기 문구 변경 */}
       <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><BookKey className="w-5 h-5 text-[#FDE047]"/> 책 정보 작성하기</h2>
       
       <div className="bg-white p-5 sketch-border space-y-5 shadow-[3px_3px_0px_rgba(69,26,3,0.05)]">
         
-        {/* 4. 썸네일 표지 노출 (스포이드 참조용) */}
         <div className="flex flex-col items-center justify-center mb-6 gap-4">
           {bookData.thumbnail ? (
             <img src={bookData.thumbnail} alt="cover preview" className="w-24 h-36 object-cover rounded shadow-md border border-[#451A03]/10" />
@@ -572,7 +580,7 @@ const BookAddFormView = ({ user, initialBook, onSaved }: { user: any, initialBoo
 
         <div>
           <label className="block text-xs font-bold mb-1.5 text-[#451A03]/70">책등에 표시할 제목 (길면 줄여주세요)</label>
-          <input type="text" value={bookData.displayTitle} onChange={e=>setBookData({...bookData, displayTitle: e.target.value})} className="w-full p-2.5 bg-white sketch-border text-sm font-bold" />
+          <input type="text" value={bookData.displayTitle} onChange={e=>setBookData({...bookData, displayTitle: e.target.value})} spellCheck="false" className="w-full p-2.5 bg-white sketch-border text-sm font-bold" />
         </div>
 
         <div className="flex gap-4">
@@ -592,13 +600,12 @@ const BookAddFormView = ({ user, initialBook, onSaved }: { user: any, initialBoo
           {initialBook?.isAiFound && <p className="text-[10px] text-[#451A03]/50 mt-1 font-bold">💡 AI가 자동 검색한 쪽수입니다. 맞는지 확인해주세요!</p>}
         </div>
 
-        {/* 6. 버튼 터치 무반응 해소를 위한 커서 및 타입 안정화 */}
         <div className="pt-4 border-t-2 border-dashed border-[#451A03]/10 flex flex-col gap-3">
-          <button onClick={() => handleSave('finished')} disabled={isSaving} className="w-full bg-[#FDE047] sketch-border py-3.5 font-black shadow-[2px_2px_0px_#451A03] hover:bg-[#FCD34D] flex items-center justify-center gap-2 cursor-pointer">
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin"/> : <CheckCircle2 className="w-4 h-4"/>} 다 읽은 책으로 추가 (서재로)
+          <button onClick={() => handleSave('finished')} disabled={!!savingType} className="w-full bg-[#FDE047] sketch-border py-3.5 font-black shadow-[2px_2px_0px_#451A03] hover:bg-[#FCD34D] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50">
+            {savingType === 'finished' ? <Loader2 className="w-4 h-4 animate-spin"/> : <CheckCircle2 className="w-4 h-4"/>} 다 읽은 책으로 추가 (서재로)
           </button>
-          <button onClick={() => handleSave('reading')} disabled={isSaving} className="w-full bg-white sketch-border py-3.5 font-bold hover:bg-stone-50 flex items-center justify-center gap-2 text-[#451A03]/80 cursor-pointer">
-            📖 읽기 시작할 책으로 추가 (내 책상으로)
+          <button onClick={() => handleSave('reading')} disabled={!!savingType} className="w-full bg-white sketch-border py-3.5 font-bold hover:bg-stone-50 flex items-center justify-center gap-2 text-[#451A03]/80 cursor-pointer disabled:opacity-50">
+            {savingType === 'reading' ? <Loader2 className="w-4 h-4 animate-spin"/> : "📖"} 읽기 시작할 책으로 추가 (내 책상으로)
           </button>
         </div>
       </div>
@@ -647,7 +654,7 @@ const BookDetailView = ({ user, book, apiKey, onClose }: { user: any, book: any,
     onClose();
   };
 
-  if (!book) return null; // 7. 책이 누락된 상태에서 렌더링 에러 차단
+  if (!book) return null;
 
   return (
     <div className="animate-in fade-in flex flex-col h-[calc(100vh-130px)] max-w-xl mx-auto">
@@ -684,7 +691,7 @@ const BookDetailView = ({ user, book, apiKey, onClose }: { user: any, book: any,
             </div>
             <div>
               <label className="block text-xs font-bold mb-1.5">한줄평</label>
-              <input type="text" inputMode="text" value={review} onChange={e=>setReview(e.target.value)} placeholder="이 책을 한 줄로 표현해 보세요" className="w-full p-3 bg-white sketch-border text-sm" />
+              <input type="text" inputMode="text" spellCheck="false" value={review} onChange={e=>setReview(e.target.value)} placeholder="이 책을 한 줄로 표현해 보세요" className="w-full p-3 bg-white sketch-border text-sm" />
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
@@ -708,17 +715,34 @@ const BookDetailView = ({ user, book, apiKey, onClose }: { user: any, book: any,
 
         {activeTab === 'note' && <NoteEditor apiKey={apiKey} initialHtml={noteHtml} editorRef={editorRef} />}
 
+        {/* 영수증 스타일 방명록 롤백 */}
         {activeTab === 'guestbook' && (
-          <div className="bg-[#FDFBF7] p-6 sketch-border shadow-[4px_4px_0px_rgba(69,26,3,0.1)] relative overflow-hidden text-center min-h-[350px] flex flex-col items-center justify-center">
-             <div className="absolute top-0 left-0 w-full h-2 bg-[#FDE047]"></div>
-             {book.thumbnail ? <img src={book.thumbnail} className="w-24 h-36 object-cover shadow-md mb-4 border border-[#451A03]/10" alt="cover"/> : <BookOpen className="w-12 h-12 text-[#451A03]/30 mb-4"/>}
-             <h3 className="font-black text-lg mb-1">{book.title}</h3>
-             <p className="text-xs text-[#451A03]/60 mb-4">{book.authors}</p>
-             <div className="text-[#FDE047] text-xl mb-2">{'★'.repeat(Math.floor(rating))}</div>
-             <p className="text-sm font-bold bg-white sketch-border px-4 py-3 italic break-keep w-full">"{review || '아직 한줄평을 남기지 않았어요.'}"</p>
-             <div className="mt-8 pt-4 border-t-2 border-dashed border-[#451A03]/20 w-full">
-               <p className="handwriting-title text-2xl">지산의 서재 방명록</p>
-             </div>
+          <div className="p-4">
+            <div className="receipt-paper p-6 mx-auto max-w-sm flex flex-col items-center">
+               <h3 className="font-bold text-xl mb-4 border-b-2 border-dashed border-gray-400 pb-2 w-full text-center">RECEIPT</h3>
+               {book.thumbnail ? <img src={book.thumbnail} className="w-20 h-28 object-cover shadow-sm mb-4 grayscale hover:grayscale-0 transition-all" alt="cover"/> : <BookOpen className="w-12 h-12 text-gray-300 mb-4"/>}
+               <h4 className="font-bold text-base mb-1 text-center w-full truncate">{book.title}</h4>
+               <p className="text-xs text-gray-500 mb-4 text-center">{book.authors}</p>
+               
+               <div className="w-full border-t-2 border-dashed border-gray-300 my-4"></div>
+               
+               <div className="flex justify-between w-full text-sm font-bold mb-2">
+                 <span>RATING</span>
+                 <span>{'★'.repeat(Math.floor(rating))}{'☆'.repeat(5 - Math.floor(rating))}</span>
+               </div>
+               
+               <div className="w-full text-left mt-2">
+                 <span className="text-xs text-gray-500 block mb-1">REVIEW</span>
+                 <p className="text-sm italic break-keep bg-gray-50 p-2 border border-gray-200">"{review || '기록된 한줄평이 없습니다.'}"</p>
+               </div>
+               
+               <div className="w-full border-t-2 border-dashed border-gray-300 my-4"></div>
+               
+               <div className="text-center w-full">
+                 <p className="text-xs mb-1">THANK YOU FOR READING</p>
+                 <div className="text-4xl font-[barcode] tracking-widest mt-2 opacity-70">||||||||||||||||</div>
+               </div>
+            </div>
           </div>
         )}
       </div>
@@ -770,7 +794,12 @@ const NoteEditor = ({ apiKey, initialHtml, editorRef }: { apiKey: string, initia
   const fileInputRef = useRef<any>(null);
   const [isOcrLoading, setIsOcrLoading] = useState(false);
 
-  useEffect(() => { if (editorRef.current && initialHtml && editorRef.current.innerHTML === '') editorRef.current.innerHTML = initialHtml; }, [initialHtml, editorRef]);
+  useEffect(() => { 
+    if (editorRef.current && initialHtml && editorRef.current.innerHTML === '') {
+      editorRef.current.innerHTML = initialHtml; 
+    }
+  }, [initialHtml, editorRef]);
+  
   const execCmd = (cmd: string, val: any = null) => { document.execCommand(cmd, false, val); editorRef.current?.focus(); };
 
   const handleOcr = async (e: any) => {
@@ -800,7 +829,8 @@ const NoteEditor = ({ apiKey, initialHtml, editorRef }: { apiKey: string, initia
           <Camera className="w-3.5 h-3.5"/> 사진 밑줄
         </button>
       </div>
-      <div ref={editorRef} contentEditable className="flex-1 p-4 bg-white overflow-y-auto text-sm focus:outline-none leading-relaxed" {...{ 'data-placeholder': '노트를 작성해보세요...' } as any} />
+      {/* spellCheck="false"로 한글 타이핑 충돌 방지 */}
+      <div ref={editorRef} contentEditable spellCheck="false" className="flex-1 p-4 bg-white overflow-y-auto text-sm focus:outline-none leading-relaxed" {...{ 'data-placeholder': '노트를 작성해보세요...' } as any} />
       {isOcrLoading && <div className="absolute inset-0 bg-white/80 flex items-center justify-center"><Loader2 className="animate-spin text-[#FDE047] w-6 h-6"/></div>}
     </div>
   );
@@ -824,7 +854,7 @@ const SettingsView = ({ apiKey, kakaoApiKey, saveKeysToDb }: { apiKey: string, k
       <div className="bg-white p-5 sketch-border space-y-4">
         <div>
           <label className="block text-xs font-bold mb-1.5">카카오 도서 검색 API 키</label>
-          <input type="text" value={kKey} onChange={e=>setKKey(e.target.value)} className="w-full p-3 bg-white sketch-border text-xs font-mono" placeholder="REST API 키" />
+          <input type="text" spellCheck="false" value={kKey} onChange={e=>setKKey(e.target.value)} className="w-full p-3 bg-white sketch-border text-xs font-mono" placeholder="REST API 키" />
         </div>
         <div>
           <label className="block text-xs font-bold mb-1.5">Gemini AI API 키 (자동 쪽수/OCR용)</label>
