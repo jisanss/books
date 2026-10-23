@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, getDoc } from 'firebase/firestore';
-import { Plus, Settings, Search, BookOpen, Calendar, CheckCircle2, Loader2, Save, Library, ChevronLeft, Camera, BookKey } from 'lucide-react';
+import { Plus, Settings, Search, BookOpen, Calendar, CheckCircle2, Loader2, Save, Library, ChevronLeft, Camera, BookKey, MessageSquare } from 'lucide-react';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDEPLBPPaaJuaYCKwAZvQN4SakVsK28faQ",
@@ -36,7 +36,6 @@ const HEIGHT_COMPARISONS = [
 const DEFAULT_COLORS = ['#FCD34D', '#FCA5A5', '#86EFAC', '#93C5FD', '#D8B4FE', '#F472B6', '#FDE047', '#E5E7EB'];
 const getRandomColor = () => DEFAULT_COLORS[Math.floor(Math.random() * DEFAULT_COLORS.length)];
 
-// --- iOS 스타일 따뜻한 3D 북 로고 SVG ---
 const BookStackLogo = () => (
   <svg viewBox="0 0 100 100" className="w-9 h-9 drop-shadow-sm" xmlns="http://www.w3.org/2000/svg">
     <g transform="translate(10, 50) rotate(-6)">
@@ -60,13 +59,18 @@ const BookStackLogo = () => (
   </svg>
 );
 
-// --- Gemini API Caller ---
-const callGeminiAPI = async (prompt: string, apiKey: string, imageBase64: string | null = null) => {
+const callGeminiAPI = async (prompt: string, apiKey: string, imageBase64: string | null = null, history: any[] = []) => {
   if (!apiKey) return null;
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
   
-  let contents: any = [];
-  if (imageBase64) {
+  let contents: any[] = [];
+  if (history.length > 0) {
+    contents = history.map(msg => ({
+      role: msg.role === 'user' ? 'user' : 'model',
+      parts: [{ text: msg.content }]
+    }));
+    contents.push({ role: "user", parts: [{ text: prompt }] });
+  } else if (imageBase64) {
     contents = [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: imageBase64.split(',')[1] } }] }];
   } else {
     contents = [{ parts: [{ text: prompt }] }];
@@ -82,7 +86,6 @@ const callGeminiAPI = async (prompt: string, apiKey: string, imageBase64: string
   }
 };
 
-// --- Main App ---
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [books, setBooks] = useState<any[]>([]);
@@ -180,7 +183,6 @@ export default function App() {
         }
         input, textarea, [contenteditable] { font-family: 'Noto Sans KR', sans-serif; }
         
-        /* 영수증 스타일 CSS */
         .receipt-paper {
           background-color: #ffffff;
           border: 1px solid #d1d5db;
@@ -190,7 +192,6 @@ export default function App() {
           color: #374151;
         }
 
-        /* 넷리파이 배너 강제 숨김 처리 */
         #netlify-badge, a[href*="netlify.com"] {
           display: none !important;
           opacity: 0 !important;
@@ -214,7 +215,7 @@ export default function App() {
       <main className="max-w-2xl mx-auto p-4 font-['Noto_Sans_KR']">
         {currentTab === 'tower' && <BookTowerView books={books} onSelect={(b: any) => { setSelectedBook(b); setCurrentTab('detail'); }} onAdd={()=>setCurrentTab('search')} />}
         {currentTab === 'desk' && <DeskView books={books} onSelect={(b: any) => { setSelectedBook(b); setCurrentTab('detail'); }} user={user} setTab={setCurrentTab} />}
-        {currentTab === 'search' && <BookSearchView kakaoApiKey={kakaoApiKey} apiKey={apiKey} onSelectForAdd={(b: any) => { setSelectedBook(b); setCurrentTab('addForm'); }} />}
+        {currentTab === 'search' && <BookSearchView kakaoApiKey={kakaoApiKey} onSelectForAdd={(b: any) => { setSelectedBook(b); setCurrentTab('addForm'); }} />}
         {currentTab === 'addForm' && <BookAddFormView user={user} initialBook={selectedBook} onSaved={handleBookAdd} />}
         {currentTab === 'detail' && selectedBook && <BookDetailView key={selectedBook.id} user={user} book={selectedBook} apiKey={apiKey} onClose={() => setCurrentTab(selectedBook?.status === 'reading' ? 'desk' : 'tower')} />}
         {currentTab === 'record' && <RecordView books={books} />}
@@ -404,11 +405,10 @@ const DeskView = ({ books, onSelect, user, setTab }: { books: any[], onSelect: a
   );
 };
 
-const BookSearchView = ({ kakaoApiKey, apiKey, onSelectForAdd }: { kakaoApiKey: string, apiKey: string, onSelectForAdd: any }) => {
+const BookSearchView = ({ kakaoApiKey, onSelectForAdd }: { kakaoApiKey: string, onSelectForAdd: any }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [isExtracting, setIsExtracting] = useState(false); 
   
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
@@ -445,28 +445,9 @@ const BookSearchView = ({ kakaoApiKey, apiKey, onSelectForAdd }: { kakaoApiKey: 
     setIsSearching(false);
   };
 
-  const handleSelect = async (book: any) => {
-    let pageCount = 250;
-    let isAiFound = false;
-
-    setIsExtracting(true);
-
-    if (apiKey) {
-      try {
-        const prompt = `책 제목: "${book.title}", 저자: "${book.authors}", 출판사: "${book.publisher}". 이 책의 정확한 총 페이지(쪽수)를 숫자만 반환해줘. 설명 없이 오직 숫자(예: 320)만 답해. 모르면 250이라고 해.`;
-        const resText = await callGeminiAPI(prompt, apiKey);
-        const match = resText?.match(/\d+/);
-        if (match) {
-          pageCount = parseInt(match[0], 10);
-          isAiFound = true;
-        }
-      } catch(e) {
-        console.error("AI 쪽수 분석 오류:", e);
-      }
-    }
-
-    setIsExtracting(false);
-    onSelectForAdd({ ...book, pageCount, isAiFound });
+  const handleSelect = (book: any) => {
+    // AI 쪽수 강제 검색을 제거하고 기본값(250)을 제공하여 즉시 넘어가도록 수정
+    onSelectForAdd({ ...book, pageCount: 250, isAiFound: false });
   };
 
   return (
@@ -489,11 +470,6 @@ const BookSearchView = ({ kakaoApiKey, apiKey, onSelectForAdd }: { kakaoApiKey: 
           
           {isSearching ? (
             <div className="flex justify-center py-12"><Loader2 className="animate-spin text-[#FDE047]" /></div>
-          ) : isExtracting ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-4 bg-white/50 sketch-border border-dashed">
-               <Loader2 className="animate-spin text-[#FDE047] w-10 h-10" />
-               <p className="text-sm font-bold text-[#451A03]/70">AI가 책의 쪽수를 확인하고 있습니다...</p>
-            </div>
           ) : (
             <div className="space-y-3">
               {results.map((book) => (
@@ -595,9 +571,8 @@ const BookAddFormView = ({ user, initialBook, onSaved }: { user: any, initialBoo
         </div>
 
         <div>
-          <label className="block text-xs font-bold mb-1.5 text-[#451A03]/70">총 페이지 수 (두께 계산용)</label>
+          <label className="block text-xs font-bold mb-1.5 text-[#451A03]/70">총 페이지 수 (직접 입력해 주세요)</label>
           <input type="number" inputMode="numeric" value={bookData.pageCount} onChange={e=>setBookData({...bookData, pageCount: Number(e.target.value)})} className="w-full p-2.5 bg-white sketch-border text-sm" />
-          {initialBook?.isAiFound && <p className="text-[10px] text-[#451A03]/50 mt-1 font-bold">💡 AI가 자동 검색한 쪽수입니다. 맞는지 확인해주세요!</p>}
         </div>
 
         <div className="pt-4 border-t-2 border-dashed border-[#451A03]/10 flex flex-col gap-3">
@@ -665,10 +640,11 @@ const BookDetailView = ({ user, book, apiKey, onClose }: { user: any, book: any,
         </button>
       </div>
 
-      <div className="flex mb-4 gap-2">
+      <div className="flex mb-4 gap-1 overflow-x-auto hide-scrollbar pb-1">
         <TabBtn active={activeTab==='note'} onClick={()=>setActiveTab('note')} label="독서 노트" />
-        <TabBtn active={activeTab==='info'} onClick={()=>setActiveTab('info')} label="책 정보/별점" />
+        <TabBtn active={activeTab==='info'} onClick={()=>setActiveTab('info')} label="책 정보" />
         <TabBtn active={activeTab==='guestbook'} onClick={()=>setActiveTab('guestbook')} label="방명록" />
+        <TabBtn active={activeTab==='aiChat'} onClick={()=>setActiveTab('aiChat')} label="AI 독서모임" />
       </div>
 
       <div className="flex-1 overflow-y-auto pb-4">
@@ -715,7 +691,6 @@ const BookDetailView = ({ user, book, apiKey, onClose }: { user: any, book: any,
 
         {activeTab === 'note' && <NoteEditor apiKey={apiKey} initialHtml={noteHtml} editorRef={editorRef} />}
 
-        {/* 영수증 스타일 방명록 롤백 */}
         {activeTab === 'guestbook' && (
           <div className="p-4">
             <div className="receipt-paper p-6 mx-auto max-w-sm flex flex-col items-center">
@@ -745,13 +720,76 @@ const BookDetailView = ({ user, book, apiKey, onClose }: { user: any, book: any,
             </div>
           </div>
         )}
+
+        {/* 부활한 AI 독서모임 탭 */}
+        {activeTab === 'aiChat' && <AIChatView apiKey={apiKey} book={book} noteHtml={noteHtml} review={review} />}
+      </div>
+    </div>
+  );
+};
+
+const AIChatView = ({ apiKey, book, noteHtml, review }: { apiKey: string, book: any, noteHtml: string, review: string }) => {
+  const [messages, setMessages] = useState<{role: string, content: string}[]>([{
+    role: 'model',
+    content: `안녕하세요! "${book.title}"에 대한 독서 모임을 시작해볼까요? 남겨주신 노트와 한줄평을 바탕으로 자유롭게 감상을 나눠주세요.`
+  }]);
+  const [input, setInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, isTyping]);
+
+  const handleSend = async () => {
+    if (!input.trim() || !apiKey) return;
+    const userMsg = { role: 'user', content: input };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setIsTyping(true);
+
+    // AI에게 맥락 제공 (HTML 태그 제거 후 전달)
+    const cleanNote = noteHtml.replace(/<[^>]*>?/gm, '');
+    const contextPrompt = `너는 나와 "${book.title}"(저자: ${book.authors})라는 책으로 독서 모임을 진행하는 다정한 파트너야. 내가 남긴 독서 노트 내용: "${cleanNote}", 내 한줄평: "${review}". 이 정보와 나의 다음 대답을 바탕으로 1~2문장으로 짧고 친근하게 대화를 이어가줘. 다음은 내 대답이야: ${input}`;
+
+    const res = await callGeminiAPI(contextPrompt, apiKey, null, messages.slice(1)); // 첫인사 제외한 이전 대화 기록 전달
+    if (res) {
+      setMessages(prev => [...prev, { role: 'model', content: res }]);
+    } else {
+      setMessages(prev => [...prev, { role: 'model', content: '앗, API 키 설정이나 네트워크를 다시 확인해 주세요.' }]);
+    }
+    setIsTyping(false);
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-stone-50 sketch-border p-4">
+      <div className="flex-1 overflow-y-auto space-y-4 mb-4 text-sm hide-scrollbar">
+        {messages.map((msg, idx) => (
+          <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[80%] p-3 rounded-2xl ${msg.role === 'user' ? 'bg-[#FDE047] text-[#451A03] rounded-tr-sm' : 'bg-white text-[#451A03] rounded-tl-sm border border-[#451A03]/10 shadow-sm'}`}>
+              {msg.content}
+            </div>
+          </div>
+        ))}
+        {isTyping && (
+          <div className="flex justify-start">
+            <div className="bg-white p-3 rounded-2xl rounded-tl-sm border border-[#451A03]/10 flex gap-1">
+              <span className="animate-bounce">.</span><span className="animate-bounce delay-100">.</span><span className="animate-bounce delay-200">.</span>
+            </div>
+          </div>
+        )}
+        <div ref={chatEndRef} />
+      </div>
+      <div className="flex gap-2">
+        <input type="text" value={input} onChange={e=>setInput(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleSend()} spellCheck="false" placeholder={apiKey ? "감상을 입력해주세요..." : "설정에서 API 키를 먼저 입력해주세요"} className="flex-1 p-3 bg-white sketch-border text-sm focus:outline-none" disabled={!apiKey || isTyping} />
+        <button onClick={handleSend} disabled={!input.trim() || !apiKey || isTyping} className="bg-[#451A03] text-white p-3 sketch-border disabled:opacity-50">
+          <MessageSquare className="w-5 h-5" />
+        </button>
       </div>
     </div>
   );
 };
 
 const TabBtn = ({ active, onClick, label }: { active: boolean, onClick: any, label: string }) => (
-  <button onClick={onClick} className={`flex-1 py-2.5 sketch-border text-xs font-bold transition-colors cursor-pointer ${active ? 'bg-[#451A03] text-[#FDFBF7]' : 'bg-white text-[#451A03]/60'}`}>
+  <button onClick={onClick} className={`flex-1 py-2.5 px-2 min-w-[75px] sketch-border text-[11px] font-bold transition-colors cursor-pointer whitespace-nowrap ${active ? 'bg-[#451A03] text-[#FDFBF7]' : 'bg-white text-[#451A03]/60'}`}>
     {label}
   </button>
 );
@@ -829,7 +867,6 @@ const NoteEditor = ({ apiKey, initialHtml, editorRef }: { apiKey: string, initia
           <Camera className="w-3.5 h-3.5"/> 사진 밑줄
         </button>
       </div>
-      {/* spellCheck="false"로 한글 타이핑 충돌 방지 */}
       <div ref={editorRef} contentEditable spellCheck="false" className="flex-1 p-4 bg-white overflow-y-auto text-sm focus:outline-none leading-relaxed" {...{ 'data-placeholder': '노트를 작성해보세요...' } as any} />
       {isOcrLoading && <div className="absolute inset-0 bg-white/80 flex items-center justify-center"><Loader2 className="animate-spin text-[#FDE047] w-6 h-6"/></div>}
     </div>
